@@ -34,7 +34,11 @@
                         :transform transform
                         :width width
                         :height height}))]
+    (js/console.log "props" props)
 
     [:& shape-custom-stroke {:shape shape
                              :base-props props
-                             :elem-name "rect"}]))
+                             :elem-name 
+                             (if (.-d props)
+                               "path"
+                               "rect")}]))

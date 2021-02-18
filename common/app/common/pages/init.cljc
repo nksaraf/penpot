@@ -49,8 +49,12 @@
     :stroke-width 0
     :stroke-color "#000000"
     :stroke-opacity 0
-    :rx 0
-    :ry 0}
+    :r1 10
+    :r2 20
+    :r3 30
+    :r4 40}
+    ;; :rx 0
+    ;; :ry 0}
 
    {:type :image}
 

@@ -181,14 +181,22 @@
            :value (attr->string :rotation values)}]])
 
       ;; RADIUS
-      (when (and (options :radius) (not (nil? (:rx values))))
-        [:div.row-flex
-         [:span.element-set-subtitle (t locale "workspace.options.radius")]
-         [:div.input-element.pixels
-          [:> numeric-input
-           {:placeholder "--"
-            :min 0
-            :on-click select-all
-            :on-change on-radius-change
-            :value (attr->string :rx values)}]]
-         [:div.input-element]])]]))
+      (let [radius-1? (not (nil? (:rx values)))
+            radius-4? (not (nil? (:r1 values)))]
+        (when (and (options :radius) (or radius-1? radius-4?))
+          [:div.row-flex
+           [:div.radius-options
+             [:div.radius-icon {:class (classnames :selected radius-1?)}
+              i/radius-1]
+             [:div.radius-icon {:class (classnames :selected radius-4?)}
+              i/radius-4]]
+           (if radius-1?
+             [:div.input-element
+              [:> numeric-input
+               {:placeholder "--"
+                :min 0
+                :on-click select-all
+                :on-change on-radius-change
+                :value (attr->string :rx values)}]]
+             [:div.input-element])
+           ]))]]))
