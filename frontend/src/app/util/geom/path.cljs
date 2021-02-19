@@ -14,6 +14,7 @@
    [app.util.data :as d]
    [app.common.data :as cd]
    [app.common.geom.point :as gpt]
+   [app.util.a2c :refer [a2c]]
    [app.util.geom.path-impl-simplify :as impl-simplify]))
 
 (defn simplify
@@ -28,23 +29,42 @@
 
 ;; Matches numbers for path values allows values like... -.01, 10, +12.22
 ;; 0 and 1 are special because can refer to flags
-(def num-regex #"([+-]?(([1-9]\d*(\.\d+)?)|(\.\d+)|0|1))")
+(def num-regex #"[+-]?(\d+(\.\d+)?|\.\d+)")
 
+(def flag-regex #"[01]")
 
-(defn coord-n [size]
-  (re-pattern (str "(?i)[a-z]\\s*"
-                   (->> (range size)
-                        (map #(identity num-regex))
-                        (str/join "\\s+")))))
+(defn fix-dot-number [val]
+  (if (str/starts-with? val ".")
+    (str "0" val)
+    val))
 
+(defn extract-params [cmd-str extract-commands]
+  (loop [result []
+         extract-idx 0
+         current {}
+         remain (-> cmd-str (subs 1) (str/trim))]
 
-(defn parse-params [cmd-str num-params]
-  (let [fix-starting-dot (fn [arg] (str/replace arg #"([^\d]|^)\." "$10."))]
-    (->> (re-seq num-regex cmd-str)
-         (map first)
-         (map fix-starting-dot)
-         (map d/read-string)
-         (partition num-params))))
+    (let [[param type] (nth extract-commands extract-idx)
+          regex (case type
+                  :flag     flag-regex
+                  #_:number num-regex)
+          match (re-find regex remain)]
+
+      (if match
+        (let [value (-> match first fix-dot-number d/read-string)
+              remain (str/replace-first remain regex "")
+              current (assoc current param value)
+              extract-idx (inc extract-idx)
+              [result current extract-idx]
+              (if (>=  extract-idx (count extract-commands))
+                [(conj result current) {} 0]
+                [result current extract-idx])]
+          (recur result
+                 extract-idx
+                 current
+                 remain))
+        (cond-> result
+          (not (empty? current)) (conj current))))))
 
 (defn command->param-list [{:keys [command params]}]
   (case command
@@ -73,96 +93,99 @@
 
 (defmethod parse-command "M" [cmd]
   (let [relative (str/starts-with? cmd "m")
-        params (parse-params cmd 2)]
-    (for [[x y] params]
+        param-list (extract-params cmd [[:x :number]
+                                        [:y :number]])]
+    (for [params param-list]
       {:command :move-to
        :relative relative
-       :params {:x x :y y}})))
+       :params params})))
 
 (defmethod parse-command "Z" [cmd]
   [{:command :close-path}])
 
 (defmethod parse-command "L" [cmd]
   (let [relative (str/starts-with? cmd "l")
-        params (parse-params cmd 2)]
-    (for [[x y] params]
+        param-list (extract-params cmd [[:x :number]
+                                        [:y :number]])]
+    (for [params param-list]
       {:command :line-to
        :relative relative
-       :params {:x x :y y}})))
+       :params params})))
 
 (defmethod parse-command "H" [cmd]
   (let [relative (str/starts-with? cmd "h")
-        params (parse-params cmd 1)]
-    (for [[value] params]
+        param-list (extract-params cmd [[:value :number]])]
+    (for [params param-list]
       {:command :line-to-horizontal
        :relative relative
-       :params {:value value}})))
+       :params params})))
 
 (defmethod parse-command "V" [cmd]
   (let [relative (str/starts-with? cmd "v")
-        params (parse-params cmd 1)]
-    (for [[value] params]
+        param-list (extract-params cmd [[:value :number]])]
+    (for [params param-list]
       {:command :line-to-vertical
        :relative relative
-       :params {:value value}})))
+       :params params})))
 
 (defmethod parse-command "C" [cmd]
   (let [relative (str/starts-with? cmd "c")
-        params (parse-params cmd 6)]
-    (for [[c1x c1y c2x c2y x y] params]
+        param-list (extract-params cmd [[:c1x :number]
+                                        [:c1y :number]
+                                        [:c2x :number]
+                                        [:c2y :number]
+                                        [:x   :number]
+                                        [:y   :number]])
+        ]
+    (for [params param-list]
       {:command :curve-to
        :relative relative
-       :params {:c1x c1x
-                :c1y c1y
-                :c2x c2x
-                :c2y c2y
-                :x x
-                :y y}})))
+       :params params})))
 
 (defmethod parse-command "S" [cmd]
   (let [relative (str/starts-with? cmd "s")
-        params (parse-params cmd 4)]
-    (for [[cx cy x y] params]
+        param-list (extract-params cmd [[:c1x :number]
+                                        [:c2y :number]
+                                        [:x  :number]
+                                        [:y  :number]])]
+    (for [params param-list]
       {:command :smooth-curve-to
        :relative relative
-       :params {:cx cx
-                :cy cy
-                :x x
-                :y y}})))
+       :params params})))
 
 (defmethod parse-command "Q" [cmd]
   (let [relative (str/starts-with? cmd "s")
-        params (parse-params cmd 4)]
-    (for [[cx cy x y] params]
+        param-list (extract-params cmd [[:c1x :number]
+                                        [:c1y :number]
+                                        [:x   :number]
+                                        [:y   :number]])]
+    (for [params param-list]
       {:command :quadratic-bezier-curve-to
        :relative relative
-       :params {:cx cx
-                :cy cy
-                :x x
-                :y y}})))
+       :params params})))
 
 (defmethod parse-command "T" [cmd]
   (let [relative (str/starts-with? cmd "t")
-        params (parse-params cmd (coord-n 2))]
-    (for [[cx cy x y] params]
+        param-list (extract-params cmd [[:x :number]
+                                        [:y :number]])]
+    (for [params param-list]
       {:command :smooth-quadratic-bezier-curve-to
        :relative relative
-       :params {:x x
-                :y y}})))
+       :params params})))
 
 (defmethod parse-command "A" [cmd]
   (let [relative (str/starts-with? cmd "a")
-        params (parse-params cmd 7)]
-    (for [[rx ry x-axis-rotation large-arc-flag sweep-flag x y] params]
+        param-list (extract-params cmd [[:rx :number]
+                                        [:ry :number]
+                                        [:x-axis-rotation :number]
+                                        [:large-arc-flag :flag]
+                                        [:sweep-flag :flag]
+                                        [:x :number]
+                                        [:y :number]])]
+    (for [params param-list]
       {:command :elliptical-arc
        :relative relative
-       :params {:rx rx
-                :ry ry
-                :x-axis-rotation x-axis-rotation
-                :large-arc-flag large-arc-flag
-                :sweep-flag sweep-flag
-                :x x
-                :y y}})))
+       :params params})))
 
 (defn command->string [{:keys [command relative params] :as entry}]
   (let [command-str (case command
@@ -184,6 +207,34 @@
   (when (and (contains? params :x)
              (contains? params :y))
     (gpt/point params)))
+
+(defn arc->beziers [prev command]
+  (let [to-command
+        (fn [[[c1x c1y] [c2x c2y] [x y]]]
+          {:command :curve-to
+           :relative (:relative command)
+           :params {:c1x c1x :c1y c1y
+                    :c2x c2x :c2y c2y
+                    :x   x   :y   y}})
+
+        x1 (get-in prev [:params :x])
+        y1 (get-in prev [:params :y])
+        rx (get-in command [:params :rx])
+        ry (get-in command [:params :rx])
+        angle (get-in command [:params :x-axis-rotation])
+        large-arc-flag (get-in command [:params :large-arc-flag])
+        sweep-flag (get-in command [:params :sweep-flag])
+        x2 (get-in command [:params :x])
+        y2 (get-in command [:params :y])
+
+        result (->> (a2c x1 y1 rx ry angle large-arc-flag sweep-flag x2 y2 nil)
+                    (partition 6)
+                    (map #(partition 2 %)))]
+
+    #_(.log js/console "command" (clj->js command) (clj->js prev))
+    #_(.log js/console "result" (clj->js result) )
+    #_(.log js/console "commands" (clj->js (mapv to-command result)))
+    (mapv to-command result)))
 
 (defn simplify-commands
   "Removes some commands and convert relative to absolute coordinates"
@@ -208,11 +259,13 @@
                   (:relative command)
                   (-> (assoc :relative false)
                       (cd/update-in-when [:params :x] + (:x pos))
-                      (cd/update-in-when [:params :y] + (:y pos)))
-
-
-                  )]
-            [(cmd-pos command) (conj result command)]))
+                      (cd/update-in-when [:params :y] + (:y pos))))
+                
+                result (conj result command)
+                #_(if (= :elliptical-arc (:command command))
+                         (cd/concat result (arc->beziers prev command))
+                         (conj result command))]
+            [(cmd-pos command) result]))
 
         start (first commands)
         start-pos (cmd-pos start)]
