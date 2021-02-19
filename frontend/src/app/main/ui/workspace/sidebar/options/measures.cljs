@@ -24,7 +24,13 @@
    [app.common.math :as math]
    [app.util.i18n :refer [t] :as i18n]))
 
-(def measure-attrs [:proportion-lock :width :height :x :y :rotation :rx :ry :selrect])
+(def measure-attrs [:proportion-lock
+                    :width :height
+                    :x :y
+                    :rotation
+                    :rx :ry
+                    :r1 :r2 :r3 :r4
+                    :selrect])
 
 (defn- attr->string [attr values]
   (let [value (attr values)]
@@ -198,5 +204,34 @@
                 :on-click select-all
                 :on-change on-radius-change
                 :value (attr->string :rx values)}]]
-             [:div.input-element])
+
+             [:*
+               [:div.input-element
+                [:> numeric-input
+                 {:placeholder "--"
+                  :min 0
+                  :on-click select-all
+                  :on-change on-radius-change
+                  :value (attr->string :r1 values)}]]
+               [:div.input-element
+                [:> numeric-input
+                 {:placeholder "--"
+                  :min 0
+                  :on-click select-all
+                  :on-change on-radius-change
+                  :value (attr->string :r2 values)}]]
+               [:div.input-element
+                [:> numeric-input
+                 {:placeholder "--"
+                  :min 0
+                  :on-click select-all
+                  :on-change on-radius-change
+                  :value (attr->string :r3 values)}]]
+               [:div.input-element
+                [:> numeric-input
+                 {:placeholder "--"
+                  :min 0
+                  :on-click select-all
+                  :on-change on-radius-change
+                  :value (attr->string :r4 values)}]]])
            ]))]]))
